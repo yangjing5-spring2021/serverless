@@ -7,7 +7,6 @@ on:
       - 'main'
 
 env:
-  artifact_name: serverless-${{ github.sha }}.zip
   s3_bucket_name: codedeploy.lambda.prod.jingyang.me
 
 jobs:
@@ -76,7 +75,7 @@ jobs:
           --deployment-config-name CodeDeployDefault.LambdaAllAtOnce \
           --deployment-group-name csye6225-serverless-deployment \
           --description "CSYE6225 Lambda CodeDeploy" \
-          --s3-location bucket=${{ env.s3_bucket_name }},key=${{ env.artifact_name }},bundleType=YAML \
+          --s3-location bucket=${{ env.s3_bucket_name }},key="appspec.yml",bundleType=YAML \
           --region us-east-1 \
           --output json)
           echo $output
