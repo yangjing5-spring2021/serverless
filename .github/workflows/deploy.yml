@@ -33,7 +33,7 @@ jobs:
         oldVersion=$(echo $output | jq -r '.FunctionVersion')
         echo $oldVersion
         zip -r function.zip .
-        output=$(update-function-code \
+        output=$(aws lambda update-function-code \
         --function-name email-function \
         --zip-file=fileb://function.zip \
         --publish \
