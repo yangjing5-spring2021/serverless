@@ -39,7 +39,7 @@ jobs:
         --publish \
         --output json)
         echo $output
-        newVersion=$(echo $output | jq -r '.FunctionVersion')
+        newVersion=$(echo $output | jq -r '.Version')
         echo $newVersion
         cat > "appspec.yml" <<- EOM
           version: 0.0
@@ -58,8 +58,15 @@ jobs:
       run: |
         pwd
         ls -al
+        mkdir codedeploy_artifact
+        mv ./appspec.yml codedeploy_artifact/
+        cd codedeploy_artifact
+        pwd
+        ls -al
+        cd ..
+        ls -al
         echo "aws s3 upload start"
-        aws s3 sync ./appspec.yml s3://${{ env.s3_bucket_name }}
+        aws s3 sync ./codedeploy_artifact s3://${{ env.s3_bucket_name }}
         echo "aws s3 upload complete"
 
     - name: deploy
