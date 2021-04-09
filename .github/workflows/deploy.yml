@@ -2,17 +2,18 @@ name: Deploy Lambda
 
 on:
   push:
-  #pull_request:
-    #types: [ closed ]
+  pull_request:
+    types: [ closed ]
     branches:
       - 'main'
 
 env:
-
+  artifact_name: serverless-${{ github.sha }}.zip
+  s3_bucket_name: codedeploy.lambda.prod.jingyang.me
 
 jobs:
   build:
-    #if: github.event.pull_request.merged == true
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -23,7 +24,55 @@ jobs:
         aws-secret-access-key: ${{ secrets.GHACTIONS_AWS_SECRET_ACCESS_KEY }}
         aws-region: us-east-1
 
-    - name: deploy to lambda
+    - name: Update Lambda function and appspec.yml
       run: |
-        zip function.zip ./index.js
-        aws lambda update-function-code --function-name=email-function --zip-file=fileb://function.zip
+        output=$(aws lambda get-alias \
+        --function-name email-function \
+        --name current_version \
+        --output json)
+        echo $output
+        oldVersion=$(echo $output | jq -r '.FunctionVersion')
+        echo $oldVersion
+        zip -r function.zip .
+        output=$(update-function-code \
+        --function-name email-function \
+        --zip-file=fileb://function.zip \
+        --publish \
+        --output json)
+        echo $output
+        newVersion=$(echo $output | jq -r '.FunctionVersion')
+        echo $newVersion
+        cat > "appspec.yml" <<- EOM
+          version: 0.0
+          Resources:
+            - MyFunction: 
+                Type: AWS::Lambda::Function
+                Properties:
+                  Name: "email-function"
+                  Alias: "current_version"
+                  CurrentVersion: "$oldVersion"
+                  TargetVersion: "$newVersion"
+        EOM
+        cat appspec.yml
+
+- name: Upload to s3
+      run: |
+        pwd
+        ls -al
+        echo "aws s3 upload start"
+        aws s3 sync ./appspec.yml s3://${{ env.s3_bucket_name }}
+        echo "aws s3 upload complete"
+
+    - name: deploy
+      run: |
+          output=$(aws deploy create-deployment \
+          --application-name csye6225-serverless \
+          --deployment-config-name CodeDeployDefault.LambdaAllAtOnce \
+          --deployment-group-name csye6225-serverless-deployment \
+          --description "CSYE6225 Lambda CodeDeploy" \
+          --s3-location bucket=${{ env.s3_bucket_name }},key=${{ env.artifact_name }},bundleType=zip \
+          --region us-east-1 \
+          --output json)
+          echo $output
+          dId=$(echo $output | jq -r '.deploymentId')
+          aws deploy wait deployment-successful --deployment-id $dId

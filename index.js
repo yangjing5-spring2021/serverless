@@ -1,45 +1,31 @@
 'use strict';
-
-const ses = new AWS.SES({apiVersion: '2010-12-01'}, {region: "us-east-1"});
+const AWS = require("aws-sdk");
+AWS.config.update({region: "us-east-1"});
+const ses = new AWS.SES({apiVersion: '2010-12-01'});
+const ddb = new AWS.DynamoDB({apiVersion: '2012-08-10'});
 
 exports.handler = async function(event) {
-    // console.log('Received event:', JSON.stringify(event, null, 4));
+    console.log('Received event:', JSON.stringify(event, null, 4));
     const message = event.Records[0].Sns.Message;
+    const username = event.Records[0].Sns.MessageAttributes.username.Value;
     console.log('Message received from SNS:', message);
-    const bookOperation = message.bookLink ? "created" : "deleted";
+    console.log('Username received from SNS:', username);
 
-    const subject = "Confirmation Email from Book Web App";
-    
-    const linkStringContent = message.bookLink ? 
-        `Click this link to check the book you created ${message.bookLink}` : "";
-    // The email body for recipients with non-HTML email clients.
-    const body_text = `Confirmation Email for User ${message.userEmail}\r\n`
-                    + `This email is to confirm that book: ${message.bookId} has been successfully
-                    ${bookOperation} for user ${message.userEmail}.\r\n`
-                    + linkStringContent;
 
-    // The HTML body of the email.
-    const linkContent = message.bookLink ? 
-        `<a href='${message.bookLink}'>Click this link to check the book you created</a>` : '';
-    
+    const subject = `Confirmation Email from Book Web App for User ${username}`;
     const body_html = `<html>
     <head></head>
     <body>
-      <h1>Confirmation Email for User ${message.userEmail}</h1>
-      <p>This email is to confirm that book: ${message.bookId} has been successfully
-        ${bookOperation} for user ${message.userEmail}.<br>
-        ${linkContent}
-      </p>
+      <h1>Confirmation Email</h1>
+      <p>${message}</p>
     </body>
     </html>`;
-
-    const SENDER_EMAIL_ADDRESS = 'sender1@prod.jingyang.me';
-
+    const SENDER_EMAIL_ADDRESS = 'no-reply-book-app@prod.jingyang.me';
     // Create sendEmail params 
     const params = {
         Destination: { /* required */
             ToAddresses: [
-                `${message.userEmail}`,
+                username,
                 /* more items */
             ]
         },
@@ -51,7 +37,7 @@ exports.handler = async function(event) {
                 },
                 Text: {
                     Charset: "UTF-8",
-                    Data: body_text
+                    Data: message
                 }
             },
             Subject: {
@@ -59,25 +45,40 @@ exports.handler = async function(event) {
                 Data: subject
             }
         },
-        Source: SENDER_EMAIL_ADDRESS, /* required */
-        ReplyToAddresses: [
-            SENDER_EMAIL_ADDRESS,
-            /* more items */
-        ],
+        Source: SENDER_EMAIL_ADDRESS
     };
-  
-    // Create the promise and SES service object
-    const sendPromise = ses.sendEmail(params).promise();
-    
-    // Handle promise's fulfilled/rejected states
-    sendPromise.then(
-        function(data) {
-            console.log(data.MessageId);
-            return new Promise.resolve(data);
-        }).catch(
-        function(err) {
-            console.error(err, err.stack);
-            return new Promise.reject(err);
-        });
-};
 
+    const DBAddParams = {
+        TableName: 'EmailMessages',
+        Item: {
+          'MessageId' : {S: message}
+        }
+      };
+
+    const DBQueryParams = {
+        TableName: 'EmailMessages',
+        Key: {
+            'MessageId' : {S: message}
+        }
+    };
+
+    try {
+        const data = await ddb.getItem(DBQueryParams).promise();
+         console.log("Success when querying DB", data.Item);
+         if (data.Item == null) {
+             try {
+                 await ddb.putItem(DBAddParams).promise();
+                 console.log("Success when adding item", data);
+                 return ses.sendEmail(params).promise();
+             } catch(err) {
+                console.log("Error when adding item ", err);
+                return Promise.reject(err);
+             }
+         }
+         console.log("message already sent");
+         return Promise.reject("message already sent");
+    } catch (err) {
+        console.log("Error when querying DB", err);
+        return Promise.reject(err);
+    }
+};
