@@ -55,7 +55,7 @@ jobs:
         EOM
         cat appspec.yml
 
-- name: Upload to s3
+    - name: Upload to s3
       run: |
         pwd
         ls -al
