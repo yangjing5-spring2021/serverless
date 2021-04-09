@@ -76,7 +76,7 @@ jobs:
           --deployment-config-name CodeDeployDefault.LambdaAllAtOnce \
           --deployment-group-name csye6225-serverless-deployment \
           --description "CSYE6225 Lambda CodeDeploy" \
-          --s3-location bucket=${{ env.s3_bucket_name }},key=${{ env.artifact_name }},bundleType=zip \
+          --s3-location bucket=${{ env.s3_bucket_name }},key=${{ env.artifact_name }},bundleType=YAML \
           --region us-east-1 \
           --output json)
           echo $output
