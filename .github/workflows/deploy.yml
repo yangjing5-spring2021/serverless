@@ -2,8 +2,8 @@ name: Deploy Lambda
 
 on:
   push:
-  pull_request:
-    types: [ closed ]
+  #pull_request:
+    #types: [ closed ]
     branches:
       - 'main'
 
